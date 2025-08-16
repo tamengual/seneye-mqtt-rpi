@@ -223,10 +223,10 @@ import paho.mqtt.client as mqtt
 import sys
 
 # --- ⚙️ EDIT YOUR CONFIGURATION HERE ---
-MQTT_BROKER = "192.168.7.253" # IP address of your MQTT broker
+MQTT_BROKER = "192.168.*.***" # IP address of your MQTT broker
 MQTT_PORT = 1883
 MQTT_USER = "mqtt-user" # Your MQTT username
-MQTT_PASS = "2Kqhd560!"   # Your MQTT password
+MQTT_PASS = "password"   # Your MQTT password
 MQTT_TOPIC = "aquarium/seneye"
 # --- Path to the C++ executable ---
 READER_PATH = "/home/tamen/SUDDriver/Cpp/seneye_reader"
