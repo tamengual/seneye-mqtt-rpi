@@ -1,4 +1,6 @@
 Seneye to MQTT Bridge for Raspberry Pi 🐠
+
+
 This project provides a reliable, headless solution to read data from a Seneye SUD (Seneye USB Device) using a Raspberry Pi and publish it to an MQTT broker. It's ideal for integrating your aquarium's water parameters (Temperature, pH, NH₃) and light metrics (PAR, Lux, PUR) into home automation platforms like Home Assistant.
 
 This guide uses a two-part system for maximum stability:
@@ -368,4 +370,5 @@ Bash
 
 systemctl status seneye-bridge.service
 journalctl -u seneye-bridge.service -f
+
 Your setup is now complete! The service will run in the background, publishing data every minute. Your sensors should appear automatically in Home Assistant under the MQTT integration.
