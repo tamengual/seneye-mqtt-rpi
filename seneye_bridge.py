@@ -20,7 +20,7 @@ MQTT_LIGHT  = os.getenv("MQTT_LIGHT", "aquarium/seneye_light")
 MQTT_RAW    = os.getenv("MQTT_RAW", "aquarium/seneye_raw")
 
 # ====== Reader binary & args ======
-READER_BIN  = "/home/tamen/SUDDriver/Cpp/seneye_reader"
+READER_BIN  = os.getenv("READER_BIN", "seneye_reader")
 # Include --debug so failures surface useful info in journald
 # Keep your calibrated offset here.
 READER_ARGS = ["--path","1-1:1.0","--temp-offset","-10.56"]
