@@ -1,107 +1,141 @@
 #!/usr/bin/env python3
-import subprocess
 import time
+import subprocess
 import json
 import paho.mqtt.client as mqtt
-import sys
+import os
+import logging
+import datetime
 
-# --- ⚙️ EDIT YOUR CONFIGURATION HERE ---
-MQTT_BROKER = "192.168.*.***" # IP address of your MQTT broker
+# ---------------------- Configuration ----------------------
+MQTT_BROKER = "192.168.7.253"
 MQTT_PORT = 1883
-MQTT_USER = "mqtt-user" # Your MQTT username
-MQTT_PASS = "password"   # Your MQTT password
+MQTT_USERNAME = "mqtt-user"
+MQTT_PASSWORD = "2Kqhd560!"
 MQTT_TOPIC = "aquarium/seneye"
-# --- Path to the C++ executable ---
+POLL_INTERVAL = 60  # seconds
 READER_PATH = "/home/tamen/SUDDriver/Cpp/seneye_reader"
-# --- How often to poll the device ---
-POLL_INTERVAL = 60  # In seconds
-# ----------------------------------------
+HOME_ASSISTANT_DISCOVERY_PREFIX = "homeassistant"
+DEVICE_NAME = "seneye"
+MAX_ERROR_COUNT = 3
 
-def publish_ha_discovery(client):
-    """Publishes the sensor configurations for Home Assistant's MQTT discovery."""
-    device_info = {
-        "identifiers": ["seneye_aquarium_monitor"],
-        "name": "Seneye Aquarium Monitor",
-        "manufacturer": "Seneye",
-        "model": "SUD"
-    }
+# Stale/anomaly thresholds
+STALE_TIMEOUT = 3600  # seconds = 1 hour
+THRESHOLDS = {"Temp": 5.0, "pH": 0.5, "NH3": 0.05}
 
+# Enable debug logs
+DEBUG = "--debug" in os.sys.argv
+logging.basicConfig(
+    format='[%(levelname)s] Python: %(message)s',
+    level=logging.DEBUG if DEBUG else logging.INFO
+)
+
+# ---------------------- MQTT Setup ----------------------
+client = mqtt.Client(protocol=mqtt.MQTTv311)
+client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+try:
+    client.connect(MQTT_BROKER, MQTT_PORT, 60)
+    logging.info("Connected to MQTT broker.")
+except Exception as e:
+    logging.error(f"Could not connect to MQTT broker: {e}")
+    exit(1)
+
+# ------------------ Home Assistant Discovery ------------------
+def send_ha_discovery():
     sensors = {
-        "Temp": {"device_class": "temperature", "unit_of_measurement": "°C", "value_template": "{{ value_json.Temp | round(2) }}"},
-        "pH": {"icon": "mdi:ph", "unit_of_measurement": "pH", "value_template": "{{ value_json.pH | round(2) }}"},
-        "NH3": {"icon": "mdi:molecule", "unit_of_measurement": "ppm", "value_template": "{{ value_json.NH3 | round(3) }}"},
-        "InWater": {"device_class": "connectivity", "value_template": "{% if value_json.InWater %}ON{% else %}OFF{% endif %}"},
-        "SlideFitted": {"device_class": "plug", "value_template": "{% if value_json.SlideFitted %}ON{% else %}OFF{% endif %}"},
-        "SlideExpired": {"device_class": "problem", "value_template": "{% if value_json.SlideExpired %}ON{% else %}OFF{% endif %}"},
-        "PAR": {"icon": "mdi:solar-power", "unit_of_measurement": "µmol/m²/s"},
-        "Lux": {"device_class": "illuminance", "unit_of_measurement": "lx"},
-        "PUR": {"icon": "mdi:leaf", "unit_of_measurement": "%"},
+        "Temp": {"unit": "°C", "device_class": "temperature"},
+        "pH": {"unit": "", "device_class": None},
+        "NH3": {"unit": "ppm", "device_class": None},
+        "InWater": {"unit": "", "device_class": "connectivity"},
     }
-
-    for name, config in sensors.items():
-        sensor_id = name.lower()
-        topic = f"homeassistant/sensor/seneye/{sensor_id}/config"
+    for key, meta in sensors.items():
         payload = {
-            "name": f"Seneye {name}",
-            "unique_id": f"seneye_{sensor_id}",
+            "name": f"{DEVICE_NAME} {key}",
             "state_topic": MQTT_TOPIC,
-            "device": device_info,
-            **config
+            "unit_of_measurement": meta["unit"],
+            "value_template": f"{{{{ value_json.{key} }}}}",
+            "unique_id": f"{DEVICE_NAME}_{key.lower()}",
+            "device": {
+                "identifiers": [DEVICE_NAME],
+                "name": DEVICE_NAME,
+                "manufacturer": "Seneye",
+                "model": "USB",
+            },
         }
-        if "value_template" not in payload:
-            payload["value_template"] = f"{{{{ value_json.{name} }}}}"
+        if meta["device_class"]:
+            payload["device_class"] = meta["device_class"]
+        topic = f"{HOME_ASSISTANT_DISCOVERY_PREFIX}/sensor/{DEVICE_NAME}_{key.lower()}/config"
+        client.publish(topic, json.dumps(payload), retain=True)
+    logging.info("Home Assistant discovery messages sent.")
 
-        client.publish(topic, json.dumps(payload), qos=1, retain=True)
-
-    print("[INFO] Python: Home Assistant discovery messages sent.")
-
+# ------------------ Get Reading ------------------
 def get_reading():
-    """Calls the C++ reader and returns parsed JSON data."""
     try:
-        result = subprocess.run(
-            [READER_PATH],
-            capture_output=True,
-            text=True,
-            timeout=20,
-            check=True
-        )
-        data = json.loads(result.stdout)
-        if "error" in data:
-            print(f"[ERROR] Python: Reader returned a JSON error: {data['error']}")
-            return None
-        return data
+        result = subprocess.run([READER_PATH], capture_output=True, text=True, timeout=10)
+        if result.returncode != 0:
+            raise Exception("Reader returned non-zero exit code")
+        return json.loads(result.stdout)
+    except subprocess.TimeoutExpired:
+        logging.error("Reader command timed out.")
+    except json.JSONDecodeError:
+        logging.error("Reader returned a JSON error: Failed to parse JSON.")
     except Exception as e:
-        print(f"[ERROR] Python: An unexpected error occurred while running reader: {e}")
-        return None
+        logging.error(f"An unexpected error occurred while running reader: {e}")
+    return None
 
+# ------------------ Health Check ------------------
+last_good = None
+last_time = None
+error_count = 0
+
+def is_stale(current):
+    global last_time
+    if last_time and (time.time() - last_time > STALE_TIMEOUT):
+        logging.warning("Data appears stale. Restarting reader.")
+        return True
+    return False
+
+def is_anomalous(prev, curr):
+    for key, threshold in THRESHOLDS.items():
+        if key in prev and key in curr:
+            if abs(curr[key] - prev[key]) > threshold:
+                logging.warning(f"Anomalous jump in {key}: {prev[key]} -> {curr[key]}")
+                return True
+    return False
+
+def reset_reader():
+    logging.warning("Attempting to reset Seneye reader...")
+    try:
+        subprocess.run(["sudo", "systemctl", "restart", "seneye-mqtt.service"], timeout=10)
+    except Exception as e:
+        logging.error(f"Failed to restart service: {e}")
+
+# ------------------ Main Loop ------------------
 def main():
-    """Main loop to read from Seneye and publish to MQTT."""
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-    client.username_pw_set(MQTT_USER, MQTT_PASS)
-    try:
-        client.connect(MQTT_BROKER, MQTT_PORT, 60)
-        client.loop_start()
-        print("[INFO] Python: Connected to MQTT broker.")
-    except Exception as e:
-        print(f"[ERROR] Python: Could not connect to MQTT broker: {e}")
-        return
-
-    # Publish the discovery configuration once on startup
-    publish_ha_discovery(client)
+    global last_good, last_time, error_count
+    send_ha_discovery()
 
     while True:
-        print("[INFO] Python: Getting new reading...")
-        sys.stdout.flush()
+        logging.info("Getting new reading...")
         reading = get_reading()
-        if reading:
-            payload = json.dumps(reading)
-            client.publish(MQTT_TOPIC, payload, qos=1, retain=True)
-            print(f"[INFO] Python: Published to {MQTT_TOPIC}: {payload}")
-        else:
-            print("[ERROR] Python: Skipping publish due to reading error.")
 
-        print(f"[INFO] Python: Waiting for {POLL_INTERVAL} seconds...")
-        sys.stdout.flush()
+        if reading:
+            if last_good:
+                if is_anomalous(last_good, reading):
+                    reset_reader()
+            last_good = reading
+            last_time = time.time()
+            error_count = 0
+            client.publish(MQTT_TOPIC, json.dumps(reading), retain=True)
+            logging.info(f"Published to {MQTT_TOPIC}: {reading}")
+        else:
+            error_count += 1
+            logging.error(f"Reading failed ({error_count}/{MAX_ERROR_COUNT})")
+            if error_count >= MAX_ERROR_COUNT or is_stale(last_good):
+                reset_reader()
+                error_count = 0
+
+        logging.info(f"Waiting for {POLL_INTERVAL} seconds...\n")
         time.sleep(POLL_INTERVAL)
 
 if __name__ == "__main__":
