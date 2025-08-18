@@ -1,0 +1,19 @@
+[Unit]
+Description=Seneye MQTT Bridge Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# If you use an .env file, export vars in /etc/default/seneye-bridge and uncomment the next line:
+# EnvironmentFile=/etc/default/seneye-bridge
+WorkingDirectory=/opt/seneye
+ExecStart=/usr/bin/python3 /opt/seneye/seneye_bridge.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -23,7 +23,7 @@ MQTT_RAW    = os.getenv("MQTT_RAW", "aquarium/seneye_raw")
 READER_BIN  = os.getenv("READER_BIN", "seneye_reader")
 # Include --debug so failures surface useful info in journald
 # Keep your calibrated offset here.
-READER_ARGS = ["--path","1-1:1.0","--temp-offset","-10.56"]
+READER_ARGS = ["--temp-offset","-10.56"]
 
 # ====== Loop tuning ======
 READ_INTERVAL_SEC = 30
