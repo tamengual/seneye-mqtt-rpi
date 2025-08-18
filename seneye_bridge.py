@@ -11,7 +11,7 @@ from datetime import datetime
 # ====== MQTT CONFIG (your values) ======
 import os
 
-MQTT_BROKER = os.getenv("MQTT_BROKER", "192.168.7.253")
+MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
 MQTT_PORT   = int(os.getenv("MQTT_PORT", "1883"))
 MQTT_USER   = os.getenv("MQTT_USER", "mqtt-user")
 MQTT_PASS   = os.getenv("MQTT_PASS", "")
