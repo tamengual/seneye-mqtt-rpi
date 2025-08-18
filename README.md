@@ -1,27 +1,31 @@
-# Seneye to MQTT Bridge for Raspberry Pi
+# Seneye → MQTT Bridge (Home Assistant friendly)
 
-A simple and reliable Python-based bridge that reads sensor data from a **Seneye SUD aquarium monitor** and publishes it to an MQTT broker — perfect for integration with **Home Assistant** or other MQTT-based automation systems.
+Publishes Seneye SUD readings (Temp, pH, NH3, PAR/Lux/Kelvin, slide state) to MQTT with HA discovery.
 
----
-
-## 🐍 What It Does
-
-- Reads temperature, pH, NH3, and light data from the Seneye USB device.
-- Sends readings via MQTT to a specified broker and topic.
-- Supports Home Assistant MQTT discovery for auto-adding sensors.
-- Automatically loops every 60 seconds.
-- Designed to be run as a **systemd service** for long-term reliability.
+## What this does
+- Calls the Seneye reader (`seneye_reader`) and converts output to JSON
+- Publishes state to:
+  - `aquarium/seneye` (main telemetry)
+  - `aquarium/seneye_light` (PAR/Lux/Kelvin/PUR)
+- Publishes **Home Assistant MQTT Discovery** configs so entities auto-appear
 
 ---
 
-## 📦 Requirements
+## Requirements
+- A Raspberry Pi or Linux host with USB access
+- A Seneye SUD + a **registered slide**
+- MQTT broker (Mosquitto) you can authenticate to
+- `seneye_reader` binary available (in `$PATH` or at a path you control)
 
-- Raspberry Pi OS (Debian-based)
-- Seneye USB device plugged into the Pi
-- MQTT broker (e.g., Mosquitto) reachable on your network
+> **Important (slides):**  
+> New or swapped slides **must be registered once on a Windows/Mac** using the official **Seneye Connect** app.  
+> After it syncs there, you can plug the probe back into the Pi and this bridge will recognize the slide.
 
-### Install Dependencies:
+---
 
+## Quick Start
+
+### 1) Install dependencies
 ```bash
 sudo apt update
-sudo apt install -y build-essential libhidapi-dev libjsoncpp-dev paho-mqtt mosquitto-clients
+sudo apt install -y python3 python3-pip
