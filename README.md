@@ -24,6 +24,15 @@ IMPORTANT (slides):
 • “seneye_reader” binary available (either in $PATH or at a known path)
   – This is the reader from the official Seneye Linux driver/SDK.
 
+  Recommended Hardware for Raspberry Pi Setups: 
+If you are connecting your Seneye to a Raspberry Pi, using the correct power hardware is critical for stability. Raspberry Pis can be sensitive to power demands, which can lead to USB devices not being detected after a reboot and potential SD card corruption.
+
+To prevent these issues, the following hardware is strongly recommended:
+
+High-Quality Power Supply: Use an official or well-regarded power supply for your specific Raspberry Pi model (e.g., 5V 3A for a Pi 4 or Zero 2 W). Do not use a standard phone charger.
+
+Powered USB Hub: This is the most important component for reliability. A powered hub has its own power a
+
 If your MQTT is Home Assistant’s Mosquitto add-on:
   Create a separate MQTT user just for this bridge so you don’t have to
   rotate credentials for everything else.
