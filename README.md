@@ -15,6 +15,8 @@ IMPORTANT (slides):
   official Seneye Connect app. After that initial sync, the probe can return
   to the Pi and will be recognized by this bridge.
 
+Please note that while this system did work. I ran into some issues with the sensors (particularly temperature) drifting significantly over time and the device stopping reporting. I believe this was due to a power fault leading to corrupted SD card. See hardware requirements below. I also built a more stable alternative with more flexibility and less moving parts: https://github.com/tamengual/home-assistant-seneye-pi.git
+
 -------------------------------------------------------------------------------
 1) Requirements
 -------------------------------------------------------------------------------
